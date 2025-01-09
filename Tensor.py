@@ -1,4 +1,5 @@
 from utils import topo_sort
+
 class Tensor:
     def __init__(self, data, children=[]):
         self.data = data
@@ -11,7 +12,7 @@ class Tensor:
     @property
     def shape(self):
         return self.data.shape 
-    
+
     def __repr__(self):
         return f"Tensor({self.data})"
 
