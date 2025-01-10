@@ -1,2 +1,2 @@
 # simplegrad
-Implementation of torch.autograd in C++ 
+Implementation of torch.autograd in Python
