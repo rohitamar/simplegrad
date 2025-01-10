@@ -1,4 +1,3 @@
-
 def topo_sort(node):
     visited = set()
     stack = []

@@ -1,15 +1,7 @@
 from Tensor import Tensor 
+from Layers import Linear 
+import numpy as np
 
-x = Tensor(1)
-y = Tensor(4)
-
-sm = x + y
-
-z = x * x + x * x * x
-w = z * sm 
-
-w.backward()
-print(sm.grad)
-print(z.grad)
-print(x.grad)
-print(y.grad)
+out = Linear(10, 2)
+x = Tensor.ones((5, 10))
+print(out(x))
