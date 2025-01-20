@@ -1,9 +1,11 @@
 from utils import topo_sort
 import numpy as np
+import operator 
 
 class Tensor:
+
     def __init__(self, data, children=[]):
-        self.data = data
+        self.data = np.array(data)
         self.children = children
         self.grad = 0
 
@@ -41,6 +43,9 @@ class Tensor:
             [(self, other.data), (other, self.data)]
         )
     
+    def __rmul__(self, other):
+        return self * other 
+    
     def __neg__(self):
         return self * -1
      
@@ -55,11 +60,24 @@ class Tensor:
         other = other if isinstance(other, Tensor) else Tensor(other)
         return other / self
     
+    @staticmethod 
+    def sum(x):
+        return Tensor(
+            np.sum(x.data),
+            [(x, 1)]
+        )
+    @staticmethod 
+    def mean(x):
+        return Tensor(
+            np.mean(x.data),
+            [(x, 1)]
+        )
+    
     @classmethod
     def pow(cls, x, p):
         return cls(
             np.pow(x.data, p),
-            [(x, (p - 1) * np.pow(x.data, p - 1))]
+            [(x, p * np.pow(x.data, p - 1))]
         )
     
     @classmethod
@@ -67,6 +85,31 @@ class Tensor:
         return cls(
             np.log(x.data),
             [(x, 1 / x.data)]
+        )
+
+    # Activation Functions (tanh, relu, sigmoid)
+    @classmethod
+    def tanh(cls, x):
+        return cls(
+            np.tanh(x.data),
+            [(x, 1 - np.tanh(2 * x.data))]
+        )
+
+    @classmethod 
+    def relu(cls, x):
+        return cls(
+            x.data * (x.data > 0),
+            [(x, x.data > 0)]
+        )
+    
+    @classmethod
+    def sigmoid(cls, x):
+        def F(x):
+            return 1.0 / (1.0 + np.exp(-x))
+        f = F(x.data)
+        return cls(
+            f,
+            [(x, f * (1 - f))]
         )
 
     def mm(self, other):
@@ -80,7 +123,7 @@ class Tensor:
         )
         return Tensor(
             self.data @ other.data,
-            [(self, other.data), (other, self.data.T)]
+            [(self, other.data.T, lambda x, y : y @ x), (other, self.data.T, lambda x, y : x @ y)]
         )
 
     @classmethod 
@@ -98,19 +141,20 @@ class Tensor:
     @classmethod
     def eye(cls, k):
         return cls(np.eye(k))
-    
-    # @classmethod
-    # def log(cls, x):
-    #     return cls(
-    #         np.log(x.data),
-
-    #     )
 
     def backward(self):
+        assert len(self.data.shape) == 0, (
+            f"grad can be only created for scalar outputs. Trying to backprop with shape {self.data.shape}."
+        )
         self.grad = 1
         for node in topo_sort(self):
-            for child, chain_grad in node.children:
-                child.grad += chain_grad * node.grad 
+            for child_tup in node.children:
+                if len(child_tup) == 2:
+                    child, chain_grad = child_tup
+                    child.grad += chain_grad * node.grad 
+                else:
+                    child, chain_grad, apply = child_tup
+                    child.grad += apply(chain_grad, node.grad)
 
 class Parameter(Tensor):
     def __init__(self, data, children=[]):

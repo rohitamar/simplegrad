@@ -35,6 +35,8 @@ class Linear(Module):
     def forward(self, input):
         return input.mm(self.weights) + self.bias
 
+
+
 class ReLU(Module):
     pass 
 

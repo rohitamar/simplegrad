@@ -4,7 +4,8 @@ def topo_sort(node):
     def dfs(node):
         if node in visited: return
         visited.add(node)
-        for neighbor, _ in node.children:
+        for x in node.children:
+            neighbor = x[0]
             dfs(neighbor)
         stack.append(node)
     dfs(node)
