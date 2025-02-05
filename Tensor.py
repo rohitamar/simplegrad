@@ -40,9 +40,15 @@ class Tensor:
     def __add__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other) 
 
+        def apply_self(grad):
+            return align_brodcast(grad, self.data.shape)
+
+        def apply_other(grad):
+            return align_brodcast(grad, other.data.shape)
+        
         return Tensor(
             self.data + other.data, 
-            [(self, lambda g : g), (other, lambda g : g)]
+            [(self, apply_self), (other, apply_other)]
         )
     
     def __radd__(self, other):
@@ -52,9 +58,9 @@ class Tensor:
         other = other if isinstance(other, Tensor) else Tensor(other)
         
         def apply_self(grad):
-            return grad
+            return align_brodcast(grad, self.data.shape)
         def apply_other(grad):
-            return -grad 
+            return align_brodcast(-grad, other.data.shape) 
 
         return Tensor(
             self.data - other.data, 
@@ -226,8 +232,9 @@ class Tensor:
         self.grad = 1
         for node in topo_sort(self):
             for child_tup in node.children:
-                child, apply_fn = child_tup
-                child.grad += apply_fn(node.grad)
+                c, apply_fn = child_tup
+                g = apply_fn(node.grad)
+                c.grad = g if c.grad is None else c.grad + g
 
 class Parameter(Tensor):
     def __init__(self, data, children=[]):

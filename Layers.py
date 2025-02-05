@@ -18,6 +18,10 @@ class Module(ABC):
     def __setattr__(self, name, value):
         if isinstance(value, Parameter):
             self._modules[name] = value
+        if isinstance(value, Module):
+            for k, v in value._modules.items():
+                self._modules[f"{name}_{k}"] = v 
+        
         super().__setattr__(name, value)
 
     def parameters(self):
@@ -30,33 +34,19 @@ class Linear(Module):
         k = math.sqrt(1 / in_features)
         self.weights = Parameter(np.random.uniform(-k, k, size=(in_features, out_features)))
         if bias:
-            self.bias = Parameter.zeros(out_features)
+            self.bias = Parameter(np.random.uniform(-k, k, size = (1, out_features)))
         
     def forward(self, input):
         return input.mm(self.weights) + self.bias
 
-class ReLU(Module):
-    def forward(self, x):
-        return x.relu()
-
-class Softmax(Module):
-    pass 
-
 class CrossEntropyLoss(Module):
-    pass 
-
+    def forward(self, pred_logits, target):
+        softmax_vals = Tensor.exp(pred_logits) / Tensor.sum(Tensor.exp(pred_logits))
+        return -Tensor.sum(Tensor.log(softmax_vals) * target)
+    
 class MSELoss(Module):
     def forward(self, prediction, target):
         return Tensor.pow(prediction - target, 2)
-        
-
-#ReLU
-#Softmax
-# optimizer
-# SGD, Adam
-# criterion's
-
-# class Softmax(Module):
-#     def __init__(self):
+    
 
 
