@@ -1,9 +1,27 @@
 from utils import topo_sort
+import numpy as np 
+
 import numpy as np
-import operator 
+
+def align_brodcast(grad, target_shape):
+    if target_shape == ():
+        return grad.sum()
+    
+    original_target_shape = target_shape
+    if len(grad.shape) > len(target_shape):
+        target_shape = (1,) * (len(grad.shape) - len(target_shape)) + target_shape
+
+    for axis, (g_dim, t_dim) in enumerate(zip(grad.shape, target_shape)):
+        if t_dim == 1 and g_dim > 1:
+            grad = grad.sum(axis=axis, keepdims=True)
+
+    if len(target_shape) > len(original_target_shape):
+        for _ in range(len(target_shape) - len(original_target_shape)):
+            grad = np.squeeze(grad, axis=0)
+    
+    return grad.reshape(original_target_shape)
 
 class Tensor:
-
     def __init__(self, data, children=[]):
         self.data = np.array(data)
         self.children = children
@@ -21,9 +39,10 @@ class Tensor:
 
     def __add__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other) 
+
         return Tensor(
             self.data + other.data, 
-            [(self, 1), (other, 1)]
+            [(self, lambda g : g), (other, lambda g : g)]
         )
     
     def __radd__(self, other):
@@ -31,16 +50,28 @@ class Tensor:
 
     def __sub__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
+        
+        def apply_self(grad):
+            return grad
+        def apply_other(grad):
+            return -grad 
+
         return Tensor(
             self.data - other.data, 
-            [(self, 1), (other, -1)]
+            [(self, apply_self), (other, apply_other)]
         )
     
     def __mul__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
+        
+        def apply_self(grad):
+            return grad * other.data 
+        def apply_other(grad):
+            return grad * self.data
+
         return Tensor(
             self.data * other.data, 
-            [(self, other.data), (other, self.data)]
+            [(self, apply_self), (other, apply_other)]
         )
     
     def __rmul__(self, other):
@@ -51,9 +82,20 @@ class Tensor:
      
     def __truediv__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
+
+        def apply_self(grad):
+            grad_self = grad / other.data
+            grad_self = align_brodcast(grad_self, self.data.shape)
+            return grad_self 
+
+        def apply_other(grad):
+            grad_other = grad * -self.data / np.pow(other.data, 2)
+            grad_other = align_brodcast(grad_other, other.data.shape)
+            return grad_other 
+
         return Tensor(
             self.data  / other.data, 
-            [(self, 1 / other.data), (other, -self.data / (np.pow(other.data, 2)))]
+            [(self, apply_self), (other, apply_other)]
         )
     
     def __rtruediv__(self, other):
@@ -62,54 +104,82 @@ class Tensor:
     
     @staticmethod 
     def sum(x):
+        def apply_self(grad):
+            return grad 
         return Tensor(
             np.sum(x.data),
-            [(x, 1)]
+            [(x, apply_self)]
         )
+
     @staticmethod 
     def mean(x):
+        def apply_self(grad):
+            return grad 
         return Tensor(
             np.mean(x.data),
-            [(x, 1)]
+            [(x, apply_self)]
         )
     
     @classmethod
     def pow(cls, x, p):
+        def apply_self(grad):
+            return grad * p * np.pow(x.data, p - 1)
         return cls(
             np.pow(x.data, p),
-            [(x, p * np.pow(x.data, p - 1))]
+            [(x, apply_self)]
         )
     
     @classmethod
     def log(cls, x):
+        def apply_self(grad):
+            return grad / x.data 
         return cls(
             np.log(x.data),
-            [(x, 1 / x.data)]
+            [(x, apply_self)]
+        )
+
+    @classmethod 
+    def exp(cls, x):
+        def apply_self(grad):
+            return grad * np.exp(x.data)
+        return cls(
+            np.exp(x.data),
+            [(x, apply_self)]
         )
 
     # Activation Functions (tanh, relu, sigmoid)
     @classmethod
     def tanh(cls, x):
+        def apply_self(grad):
+            return grad * (1 - np.tanh(2 * x.data))
         return cls(
             np.tanh(x.data),
-            [(x, 1 - np.tanh(2 * x.data))]
+            [(x, apply_self)]
         )
 
     @classmethod 
     def relu(cls, x):
+        def apply_self(grad):
+            return (x.data > 0) * grad
+
         return cls(
             x.data * (x.data > 0),
-            [(x, x.data > 0)]
+            [(x, apply_self)]
         )
     
     @classmethod
     def sigmoid(cls, x):
         def F(x):
             return 1.0 / (1.0 + np.exp(-x))
+        
         f = F(x.data)
+        def apply_self(grad):
+            nonlocal f
+            return f * (1 - f) * grad
+
         return cls(
             f,
-            [(x, f * (1 - f))]
+            [(x, apply_self)]
         )
 
     def mm(self, other):
@@ -121,9 +191,16 @@ class Tensor:
             f"Incompatible shapes for matrix multiplication: "
             f"self.data.shape = {self.data.shape}, other.data.shape = {other.data.shape}."
         )
+
+        def apply_self(grad):
+            return grad @ other.data.T 
+
+        def apply_other(grad):
+            return self.data.T @ grad
+
         return Tensor(
             self.data @ other.data,
-            [(self, other.data.T, lambda x, y : y @ x), (other, self.data.T, lambda x, y : x @ y)]
+            [(self, apply_self), (other, apply_other)]
         )
 
     @classmethod 
@@ -149,12 +226,8 @@ class Tensor:
         self.grad = 1
         for node in topo_sort(self):
             for child_tup in node.children:
-                if len(child_tup) == 2:
-                    child, chain_grad = child_tup
-                    child.grad += chain_grad * node.grad 
-                else:
-                    child, chain_grad, apply = child_tup
-                    child.grad += apply(chain_grad, node.grad)
+                child, apply_fn = child_tup
+                child.grad += apply_fn(node.grad)
 
 class Parameter(Tensor):
     def __init__(self, data, children=[]):
