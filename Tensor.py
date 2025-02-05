@@ -153,41 +153,6 @@ class Tensor:
             [(x, apply_self)]
         )
 
-    # Activation Functions (tanh, relu, sigmoid)
-    @classmethod
-    def tanh(cls, x):
-        def apply_self(grad):
-            return grad * (1 - np.tanh(2 * x.data))
-        return cls(
-            np.tanh(x.data),
-            [(x, apply_self)]
-        )
-
-    @classmethod 
-    def relu(cls, x):
-        def apply_self(grad):
-            return (x.data > 0) * grad
-
-        return cls(
-            x.data * (x.data > 0),
-            [(x, apply_self)]
-        )
-    
-    @classmethod
-    def sigmoid(cls, x):
-        def F(x):
-            return 1.0 / (1.0 + np.exp(-x))
-        
-        f = F(x.data)
-        def apply_self(grad):
-            nonlocal f
-            return f * (1 - f) * grad
-
-        return cls(
-            f,
-            [(x, apply_self)]
-        )
-
     def mm(self, other):
         assert self.data.ndim == 2 and other.data.ndim == 2, (
             f"Both tensors must be 2-dimensional, but got shapes {self.data.shape} and {other.data.shape}."

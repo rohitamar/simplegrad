@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.datasets import fetch_openml
 from Tensor import Tensor 
+from Functional import Functional as F
 from optim import SGD 
 from Layers import Module, Linear, CrossEntropyLoss
 from utils import one_hot_encode
@@ -26,7 +27,7 @@ class Model(Module):
         self.lin2 = Linear(128, 10)
     
     def forward(self, x):
-        x = Tensor.relu(self.lin1(x))
+        x = F.relu(self.lin1(x))
         return self.lin2(x)
 
 model = Model()
