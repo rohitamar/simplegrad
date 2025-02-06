@@ -64,6 +64,7 @@ class Functional:
         out_h, out_w = (h - kh) // kh + 1, (w - kw) // kw + 1
         
         input = input.reshape(n, c, out_h, kh, out_w, kw)
+        # rewrite with np.swapaxes
         input = np.transpose(input, (0, 1, 2, 4, 3, 5))
         max_out = input.max(axis=(-1, -2))
         
@@ -87,7 +88,30 @@ class Functional:
             [(input, apply_self)]
         ) 
 
+
     @staticmethod 
     def conv2d(input, filters):
-        pass 
+        def convolve(input, kernel):
+            c = 0
+            while len(input) < 4:
+                c += 1
+                input = input[np.newaxis, :]
+            
+            submatrices_shape = input.shape[:-2] + tuple(np.subtract(input.shape[-2:], kernel.shape[-2:]) + 1) + kernel.shape[-2:]
+            strides = input.strides + input.strides[-2:]
+            
+            sub_matrices = np.lib.stride_tricks.as_strided(input, submatrices_shape, strides)
+            sub_matrices = np.rollaxis(sub_matrices, 1, 4)
+
+            convolved = np.einsum('hwnij,oij->hwo', sub_matrices, kernel)
+            convolved = np.rollaxis(convolved, 3, 1)
+
+            for _ in range(c):
+                convolved = np.squeeze(convolved)
+            return convolved
+        
+        return Tensor(
+            convolve(input.data, filters.data), 
+            []
+        )
     
