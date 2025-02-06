@@ -49,9 +49,36 @@ class Functional:
             [(input, apply_self)]
         )
     
-    @staticmethod 
+    @staticmethod
     def max_pool2d(input, kernel_size):
-        pass 
+        if isinstance(kernel_size, int):
+            kernel_size = (kernel_size, kernel_size)
+        c = 0
+        while len(input.shape) < 4:
+            c += 1
+            input = input[np.newaxis, :]
+        n, c, h, w = input.shape 
+        kh, kw = kernel_size 
+        out_h, out_w = (h - kh) // kh + 1, (w - kw) // kw + 1
+        input = input.reshape(n, c, out_h, kh, out_w, kw)
+        input = np.transpose(input, (0, 1, 2, 4, 3, 5))
+        max_out = input.max(axis=(-1, -2))
+        y = input.reshape(*input.shape[:-2], -1)
+        i, j = np.unravel_index(np.argmax(y, axis=-1), kernel_size)
+        A, B, C, D = np.indices((n, c, out_h, out_w))
+        A, B, C, D, i, j = A.flatten(), B.flatten(), C.flatten(), D.flatten(), i.flatten(), j.flatten()
+        back_grad = np.zeros((n, c, out_h, out_w, kh, kw))
+        back_grad[A, B, C, D, i, j] = 1
+        back_grad = np.transpose(back_grad, (0, 1, 2, 4, 3, 5))
+        back_grad = back_grad.reshape(n, c, out_h, kh, out_w * kw).reshape(n, c, out_h * kh, out_w * kw)
+        for _ in range(c):
+            max_out, back_grad = np.squeeze(max_out), np.squeeze(back_grad)
+        def apply_self(grad):
+            return grad * back_grad 
+        return Tensor(
+            max_out, 
+            [(input, apply_self)]
+        ) 
 
     @staticmethod 
     def conv2d(input, filters):
