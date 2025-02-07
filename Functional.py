@@ -49,22 +49,32 @@ class Functional:
             [(input, apply_self)]
         )
     
+    @staticmethod 
+    def pad(input, p):
+        padded_input = np.pad(input.data, 
+                        pad_width=((0, 0), (0, 0), (p, p), (p, p)),
+                        mode='constant')
+
+        def apply_self(grad):
+            return grad[..., p:-p, p:-p]
+        
+        return Tensor(
+            padded_input, 
+            [(input, apply_self)]
+        )
+
     @staticmethod
     def max_pool2d(input, kernel_size):
+        tensor_input = input 
+        input = input.data 
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size, kernel_size)
-
-        c = 0
-        while len(input.shape) < 4:
-            c += 1
-            input = input[np.newaxis, :]
         
         n, c, h, w = input.shape 
         kh, kw = kernel_size 
         out_h, out_w = (h - kh) // kh + 1, (w - kw) // kw + 1
         
         input = input.reshape(n, c, out_h, kh, out_w, kw)
-        # rewrite with np.swapaxes
         input = np.transpose(input, (0, 1, 2, 4, 3, 5))
         max_out = input.max(axis=(-1, -2))
         
@@ -78,40 +88,77 @@ class Functional:
         back_grad = np.transpose(back_grad, (0, 1, 2, 4, 3, 5))
         back_grad = back_grad.reshape(n, c, out_h, kh, out_w * kw).reshape(n, c, out_h * kh, out_w * kw)
         
-        for _ in range(c):
-            max_out, back_grad = np.squeeze(max_out), np.squeeze(back_grad)
-        
         def apply_self(grad):
-            return grad * back_grad 
+            # print("a: ", back_grad.shape, grad.shape)
+            upsampled_grad = np.repeat(np.repeat(grad, kw, axis = -2), kh, axis = -1)
+            return upsampled_grad * back_grad
+         
         return Tensor(
             max_out, 
-            [(input, apply_self)]
+            [(tensor_input, apply_self)]
         ) 
 
 
     @staticmethod 
     def conv2d(input, filters):
-        def convolve(input, kernel):
-            c = 0
-            while len(input) < 4:
-                c += 1
-                input = input[np.newaxis, :]
-            
+
+        # input.shape = (batch_size, c_in, h, w)
+        # kernel.shape = (c_out, c_in, k_h, k_w)
+        def cross_correlation(input, kernel):
+            # assert len(input.shape) == 4 and kernel.shape == 4, (
+            #     f"Expected input.shape and kernel.shape to be 4, but got input.shape={input.shape} and kernel.shape={kernel.shape}"
+            # )
+            # print("a: ", input.shape, kernel.shape)
             submatrices_shape = input.shape[:-2] + tuple(np.subtract(input.shape[-2:], kernel.shape[-2:]) + 1) + kernel.shape[-2:]
             strides = input.strides + input.strides[-2:]
-            
             sub_matrices = np.lib.stride_tricks.as_strided(input, submatrices_shape, strides)
             sub_matrices = np.rollaxis(sub_matrices, 1, 4)
-
-            convolved = np.einsum('hwnij,oij->hwo', sub_matrices, kernel)
+            # print("b: ", sub_matrices.shape, kernel.shape, "\n")
+            convolved = np.einsum('bhwnij,onij->bhwo', sub_matrices, kernel)
             convolved = np.rollaxis(convolved, 3, 1)
-
-            for _ in range(c):
-                convolved = np.squeeze(convolved)
+            print("convv", convolved.shape)
             return convolved
+
+        def transpose_conv(input, kernel):
+            def ex_tw(x):
+                return 
+            # print(input.shape, kernel.shape)
+
+            b, c_in, h, w = input.shape 
+            kout_channel, kin_channel, kh, kw = kernel.shape 
+
+            # out = np.zeros((h + kh - 1, w + kw - 1, b, c_in))
+            out = np.zeros((b, kin_channel, h + kh - 1, w + kw - 1))
+            # input = np.transpose(input, (2, 3, 0, 1))
+            kernel = np.transpose(kernel, (1, 0, 2, 3))
+            input = np.transpose(input, (0, 2, 3, 1))
+            # print(kernel[0].shape)
+            # print("before loop: ", input.shape, kernel.shape)
+            for bi in range(b):
+                for c in range(kin_channel):
+                    for i in range(h):
+                        for j in range(w):
+                            out[bi, c, i: i + kh, j:j + kw] += np.sum(input[bi][i][j][:, np.newaxis, np.newaxis]* kernel[c], axis = 0)
+            print(out.shape)
+
+            return out 
+
+        output = cross_correlation(input.data, filters.data)
+        # print("input.shape: ", input.shape)
+        # w.r.t. weights
+        def apply_image(grad):
+            x = np.transpose(input.data, (1, 0, 2, 3))
+            y = np.transpose(grad, (1, 0, 2, 3))
+            return cross_correlation(x, y) 
         
+        # w.r.t input image 
+        def apply_weight(grad):
+            return transpose_conv(grad, filters.data)
+        
+
+
         return Tensor(
-            convolve(input.data, filters.data), 
-            []
+            output, 
+            [(filters, apply_image), (input, apply_weight)]
         )
     

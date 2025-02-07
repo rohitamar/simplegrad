@@ -111,7 +111,8 @@ class Tensor:
     @staticmethod 
     def sum(x):
         def apply_self(grad):
-            return grad 
+            return grad * np.ones(x.data.shape)
+        
         return Tensor(
             np.sum(x.data),
             [(x, apply_self)]
@@ -153,6 +154,15 @@ class Tensor:
             [(x, apply_self)]
         )
 
+    @classmethod 
+    def reshape(cls, x, shape):
+        def apply_self(grad):
+            return grad.reshape(x.shape)
+        return Tensor(
+            x.data.reshape(shape),
+            [(x, apply_self)]
+        )
+    
     def mm(self, other):
         assert self.data.ndim == 2 and other.data.ndim == 2, (
             f"Both tensors must be 2-dimensional, but got shapes {self.data.shape} and {other.data.shape}."
@@ -189,12 +199,12 @@ class Tensor:
     @classmethod
     def eye(cls, k):
         return cls(np.eye(k))
-
+    
     def backward(self):
         assert len(self.data.shape) == 0, (
             f"grad can be only created for scalar outputs. Trying to backprop with shape {self.data.shape}."
         )
-        self.grad = 1
+        self.grad = np.array(1)
         for node in topo_sort(self):
             for child_tup in node.children:
                 c, apply_fn = child_tup
