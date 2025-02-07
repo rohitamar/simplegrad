@@ -69,7 +69,6 @@ class Functional:
         input = input.data 
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size, kernel_size)
-        
         n, c, h, w = input.shape 
         kh, kw = kernel_size 
         out_h, out_w = (h - kh) // kh + 1, (w - kw) // kw + 1
@@ -104,9 +103,9 @@ class Functional:
 
         # input.shape = (batch_size, c_in, h, w)
         # kernel.shape = (c_out, c_in, k_h, k_w)
-        def cross_correlation(input, kernel):
-            print(filters.shape)
-            print(input.shape, kernel.shape)
+        def cross_correlation(input, kernel, grad = False):
+            # print(filters.shape)
+            # print("here: ", input.shape, kernel.shape)
             # assert len(input.shape) == 4 and kernel.shape == 4, (
             #     f"Expected input.shape and kernel.shape to be 4, but got input.shape={input.shape} and kernel.shape={kernel.shape}"
             # )
@@ -117,15 +116,18 @@ class Functional:
             sub_matrices = np.rollaxis(sub_matrices, 1, 4)
             # print("b: ", sub_matrices.shape, kernel.shape, "\n")
             convolved = np.einsum('bhwnij,onij->bhwo', sub_matrices, kernel)
-            print("convvvv: ", convolved.shape)
+            # print("convvvv: ", convolved.shape)
             convolved = np.rollaxis(convolved, 3, 1)
-            print("convv", convolved.shape)
+            # print("convv", convolved.shape)
+
+            if grad: 
+                convolved = np.transpose(convolved, (1, 0, 2, 3))
             return convolved
 
         def transpose_conv(input, kernel):
             def ex_tw(x):
                 return 
-            # print(input.shape, kernel.shape)
+            # print("here: ", input.shape, kernel.shape)
 
             b, c_in, h, w = input.shape 
             kout_channel, kin_channel, kh, kw = kernel.shape 
@@ -150,10 +152,10 @@ class Functional:
         # print("input.shape: ", input.shape)
         # w.r.t. weights
         def apply_image(grad):
-            print("---")
+            # print("---")
             x = np.transpose(input.data, (1, 0, 2, 3))
             y = np.transpose(grad, (1, 0, 2, 3))
-            return cross_correlation(input.data, grad) 
+            return cross_correlation(x, y, grad=True) 
         
         # w.r.t input image 
         def apply_weight(grad):

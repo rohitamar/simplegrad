@@ -25,11 +25,11 @@ class Tensor:
     def __init__(self, data, children=[]):
         self.data = np.array(data)
         self.children = children
-        self.grad = 0
+        self.grad = None 
 
     def numpy(self):
         return self.data
-    
+
     @property
     def shape(self):
         return self.data.shape 
@@ -108,25 +108,27 @@ class Tensor:
         other = other if isinstance(other, Tensor) else Tensor(other)
         return other / self
     
-    @staticmethod 
-    def sum(x):
+    @staticmethod
+    def sum(x, dim=None):
         def apply_self(grad):
-            return grad * np.ones(x.data.shape)
+            expanded_grad = np.expand_dims(grad, axis=dim) if dim is not None else grad
+            return expanded_grad * np.ones_like(x.data)
         
         return Tensor(
-            np.sum(x.data),
+            np.sum(x.data, axis=dim, keepdims=False),
             [(x, apply_self)]
         )
 
-    @staticmethod 
-    def mean(x):
+    @staticmethod
+    def mean(x, dim=None):
         def apply_self(grad):
-            return grad 
+            expanded_grad = np.expand_dims(grad, axis=dim) if dim is not None else grad
+            return expanded_grad * np.ones_like(x.data) / (x.data.shape[dim] if dim is not None else x.data.size)
         return Tensor(
-            np.mean(x.data),
+            np.mean(x.data, axis=dim, keepdims=False),
             [(x, apply_self)]
         )
-    
+        
     @classmethod
     def pow(cls, x, p):
         def apply_self(grad):

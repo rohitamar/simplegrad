@@ -4,21 +4,9 @@ from Tensor import Tensor
 from Functional import Functional as F
 from optim import SGD 
 from Layers import Module, Linear, CrossEntropyLoss
-from utils import one_hot_encode
+from utils import get_mnist_dataset
 
 np.random.seed(6969)
-
-def get_dataset():
-    mnist = fetch_openml('mnist_784', version=1)
-    X, y = mnist["data"], mnist["target"]
-    X, y = X.to_numpy(), y.to_numpy()
-    y = y.astype(int)
-    y = one_hot_encode(y, 10)
-    X = X / 255
-    train_size = int(0.8 * len(X))
-    X_train, y_train, X_test, y_test = X[:train_size], y[:train_size], X[train_size:], y[train_size:]
-
-    return X_train, y_train, X_test, y_test
 
 class Model(Module):
     def __init__(self):
@@ -34,11 +22,11 @@ model = Model()
 optim = SGD(model.parameters(), lr = 1e-3)
 criterion = CrossEntropyLoss()
 
-epochs = 1000
+epochs = 20000
 batch_size = 64
-test_every = 1
+test_every = 100
 
-X_train, y_train, X_test, y_test = get_dataset()
+X_train, y_train, X_test, y_test = get_mnist_dataset()
 X_test, y_test = Tensor(X_test), Tensor(y_test)
 
 train_accs = []
@@ -72,9 +60,9 @@ for epoch in range(epochs):
         print(f"Epoch {epoch}: Training Accuracy: {train_acc} Testing Accuracy: {test_acc}") 
 
 import matplotlib.pyplot as plt 
-indices = list(range(epochs))
-plt.plot(indices, train_accs)
-plt.plot(indices, test_accs)
+
+# plt.plot(range(len(train_accs)), train_accs)
+plt.plot(range(len(test_accs)), test_accs)
 plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
 plt.title("NN performance on MNIST")
