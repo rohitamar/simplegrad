@@ -105,6 +105,8 @@ class Functional:
         # input.shape = (batch_size, c_in, h, w)
         # kernel.shape = (c_out, c_in, k_h, k_w)
         def cross_correlation(input, kernel):
+            print(filters.shape)
+            print(input.shape, kernel.shape)
             # assert len(input.shape) == 4 and kernel.shape == 4, (
             #     f"Expected input.shape and kernel.shape to be 4, but got input.shape={input.shape} and kernel.shape={kernel.shape}"
             # )
@@ -115,6 +117,7 @@ class Functional:
             sub_matrices = np.rollaxis(sub_matrices, 1, 4)
             # print("b: ", sub_matrices.shape, kernel.shape, "\n")
             convolved = np.einsum('bhwnij,onij->bhwo', sub_matrices, kernel)
+            print("convvvv: ", convolved.shape)
             convolved = np.rollaxis(convolved, 3, 1)
             print("convv", convolved.shape)
             return convolved
@@ -139,7 +142,7 @@ class Functional:
                     for i in range(h):
                         for j in range(w):
                             out[bi, c, i: i + kh, j:j + kw] += np.sum(input[bi][i][j][:, np.newaxis, np.newaxis]* kernel[c], axis = 0)
-            print(out.shape)
+            # print(out.shape)
 
             return out 
 
@@ -147,12 +150,14 @@ class Functional:
         # print("input.shape: ", input.shape)
         # w.r.t. weights
         def apply_image(grad):
+            print("---")
             x = np.transpose(input.data, (1, 0, 2, 3))
             y = np.transpose(grad, (1, 0, 2, 3))
-            return cross_correlation(x, y) 
+            return cross_correlation(input.data, grad) 
         
         # w.r.t input image 
         def apply_weight(grad):
+            
             return transpose_conv(grad, filters.data)
         
 
